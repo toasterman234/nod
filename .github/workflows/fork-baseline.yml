@@ -1,0 +1,54 @@
+name: Fork baseline verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fork-baseline.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    name: Source checks and focused tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout source without write credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.21.0'
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.34.5 --activate
+          node --version
+          pnpm --version
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check application definitions
+        run: pnpm run check:apps
+      - name: Check architecture and lint
+        run: pnpm run lint
+      - name: Check types
+        run: pnpm run typecheck
+      - name: Run focused approval and Pi tests
+        run: pnpm exec tsx --test tests/approvals.test.ts tests/pi.test.ts
+      - name: Build frontend
+        run: pnpm run build
